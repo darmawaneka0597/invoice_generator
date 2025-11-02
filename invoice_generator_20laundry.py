@@ -165,11 +165,11 @@ def _split_names(text: str):
 st.set_page_config(page_title="20 Laundry Invoice Generator", layout="wide")
 st.title("🧾 20 LAUNDRY - Invoice Generator")
 
-uploaded_file = st.file_uploader("📂 Drag & drop your ReBill CSV here", type=["csv"])
+uploaded_file = st.file_uploader("📂 Upload data ReBill CSV disini", type=["csv"])
 
 if uploaded_file:
     df = load_rebill_df(uploaded_file, skiprows=5)
-    st.success("✅ CSV loaded.")
+    st.success("✅ CSV berhasil terupload.")
 
     # Build customer choices from CSV
     all_customers = sorted(df["Nama Pelanggan"].astype(str).str.strip().dropna().unique())
@@ -194,33 +194,33 @@ if uploaded_file:
 
     ensure_session_agents(default_agents)
 
-    st.subheader("🧍 Agent Management")
+    st.subheader("🧍 Pengaturan Agent")
 
     colA, colB = st.columns(2)
     with colA:
-        mode = st.radio("Add or Select Agent", ["Select Existing", "Add New"], horizontal=True)
+        mode = st.radio("Tambahkan atau Pilih Agent", ["Pilih Agent tersedia", "Tambahkan Agent Baru"], horizontal=True)
 
     # ---------- ADD NEW (centered layout) ----------
-    if mode == "Add New":
+    if mode == "Tambahkan Agent Baru":
     # 3-column layout to center the form
         _left, _center, _right = st.columns([1, 2, 1])
 
         with _center:
             new_agent = st.text_input(
-            "New agent name (case-insensitive):",
+            "Masukan Nama Agent:",
             key="new_agent",
             ).strip()
 
         # ↓ This now appears directly under the name field, same column
             picked_customers = st.multiselect(
-            "Pick customers from CSV (multi-select)",
+            "Pilih Nama Customer (bisa lebih dari 1)",
             options=all_customers,
             default=[],
             key="picked_from_csv",
             )
 
             extra_customers_text = st.text_area(
-            "Or add additional customers (one per line or comma-separated)",
+            "Lainnya",
             value="",
             placeholder="e.g.\nSUKAVILLA\nPak Roy RDP\nBu Rini",
             key="extra_customers_text",
@@ -230,9 +230,9 @@ if uploaded_file:
             extra_customers = [p.strip() for line in extra_customers_text.splitlines()
                            for p in line.split(",") if p.strip()]
 
-            if st.button("➕ Add Agent", use_container_width=True):
+            if st.button("➕ Tambahkan Agent", use_container_width=True):
                 if not new_agent:
-                    st.warning("Please enter an agent name.")
+                    st.warning("Masukan Nama Agent.")
                 else:
                 # Case-insensitive create/merge
                     existing_key = normalize_key_lookup(st.session_state.agents, new_agent)
@@ -241,7 +241,7 @@ if uploaded_file:
                     base.update(picked_customers)
                     base.update(extra_customers)
                     st.session_state.agents[final_key] = sorted(base, key=str.lower)
-                    st.success(f"Agent '{final_key}' now has {len(st.session_state.agents[final_key])} customers.")
+                    st.success(f"Agent '{final_key}' sekarang memiliki {len(st.session_state.agents[final_key])} customers.")
 
     
 
@@ -249,7 +249,7 @@ if uploaded_file:
 
     # ---------- SELECT EXISTING (show & edit customers) ----------
     else:
-        agent_name = st.selectbox("👤 Select Agent", list(st.session_state.agents.keys()))
+        agent_name = st.selectbox("👤 Pilih Agent", list(st.session_state.agents.keys()))
         current_key = normalize_key_lookup(st.session_state.agents, agent_name)
         current_customers = [c.strip() for c in st.session_state.agents.get(current_key, []) if str(c).strip()]
 
@@ -257,39 +257,39 @@ if uploaded_file:
     # so defaults are always contained in options
         options_customers = sorted(set(all_customers) | set(current_customers), key=str.lower)
 
-        st.markdown("**Customers for this agent:**")
+        st.markdown("**Customers untuk Agent ini:**")
         edited_customers = st.multiselect(
-        "Edit selection (from CSV list) — you can type to filter",
+        "Ketik Nama Customer",
         options=options_customers,
         default=sorted(current_customers, key=str.lower),
         key="cust_multiselect"
         )
 
         typed_new_text = st.text_area(
-        "Add customer(s) manually (one per line or comma-separated):",
+        "Customer Lainnya",
         key="cust_text"
         )
         typed_new = _split_names(typed_new_text)
 
-        if st.button("💾 Save Customers for Agent"):
+        if st.button("💾 Simpan Customer untuk Agent ini"):
             base = set(n.strip() for n in edited_customers)
             base.update(typed_new)
         # keep any existing customers not present in CSV list (already covered by union, but safe)
             base.update([c for c in current_customers if c not in all_customers])
             st.session_state.agents[current_key] = sorted(base, key=str.lower)
-            st.success(f"Saved {len(st.session_state.agents[current_key])} customers for '{current_key}'.")
+            st.success(f"Menyimpan {len(st.session_state.agents[current_key])} customers untuk '{current_key}'.")
 
-    month_year = st.text_input("📅 Month (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
-    discount = st.slider("💸 Discount Rate", 0.0, 0.5, 0.20, 0.05)
+    month_year = st.text_input("📅 Bulan (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
+    discount = st.slider("💸 Diskon", 0.0, 0.5, 0.20, 0.05)
 
-    if st.button("Generate Invoice"):
+    if st.button("Buat Invoice"):
         if not agent_name:
-            st.warning("⚠️ Please select or add an agent first.")
+            st.warning("⚠️ Silahkan Pilih atau Tambah Agent terlebih dahulu.")
         else:
             invoice = build_invoice_dict(df, st.session_state.agents, agent_name, month_year, discount)
 
             if not invoice["rows"]:
-                st.warning("⚠️ No matching records found for this agent and month.")
+                st.warning("⚠️ Nama Agent dan Customers tidak ditemukan.")
             else:
                 # Build display DataFrame with formatting (0 decimals as per your code)
                 inv_df = pd.DataFrame(invoice["rows"])
