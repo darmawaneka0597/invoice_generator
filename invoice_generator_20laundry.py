@@ -202,39 +202,39 @@ if uploaded_file:
 
     # ---------- ADD NEW (centered layout) ----------
     if mode == "Tambahkan Agent Baru":
-    # 3-column layout to center the form
+        # 3-column layout to center the form
         _left, _center, _right = st.columns([1, 2, 1])
 
         with _center:
             new_agent = st.text_input(
-            "Masukan Nama Agent:",
-            key="new_agent",
+                "Masukan Nama Agent:",
+                key="new_agent",
             ).strip()
 
-        # ↓ This now appears directly under the name field, same column
+            # ↓ This now appears directly under the name field, same column
             picked_customers = st.multiselect(
-            "Pilih Nama Customer (bisa lebih dari 1)",
-            options=all_customers,
-            default=[],
-            key="picked_from_csv",
+                "Pilih Nama Customer (bisa lebih dari 1)",
+                options=all_customers,
+                default=[],
+                key="picked_from_csv",
             )
 
             extra_customers_text = st.text_area(
-            "Lainnya",
-            value="",
-            placeholder="e.g.\nSUKAVILLA\nPak Roy RDP\nBu Rini",
-            key="extra_customers_text",
-            height=120,
+                "Lainnya",
+                value="",
+                placeholder="e.g.\nSUKAVILLA\nPak Roy RDP\nBu Rini",
+                key="extra_customers_text",
+                height=120,
             )
 
             extra_customers = [p.strip() for line in extra_customers_text.splitlines()
-                           for p in line.split(",") if p.strip()]
+                               for p in line.split(",") if p.strip()]
 
             if st.button("➕ Tambahkan Agent", use_container_width=True):
                 if not new_agent:
                     st.warning("Masukan Nama Agent.")
                 else:
-                # Case-insensitive create/merge
+                    # Case-insensitive create/merge
                     existing_key = normalize_key_lookup(st.session_state.agents, new_agent)
                     final_key = existing_key if existing_key in st.session_state.agents else new_agent
                     base = set(n.strip() for n in st.session_state.agents.get(final_key, []))
@@ -242,8 +242,6 @@ if uploaded_file:
                     base.update(extra_customers)
                     st.session_state.agents[final_key] = sorted(base, key=str.lower)
                     st.success(f"Agent '{final_key}' sekarang memiliki {len(st.session_state.agents[final_key])} customers.")
-
-    
 
         agent_name = new_agent  # used below if user clicks Generate
 
@@ -253,34 +251,41 @@ if uploaded_file:
         current_key = normalize_key_lookup(st.session_state.agents, agent_name)
         current_customers = [c.strip() for c in st.session_state.agents.get(current_key, []) if str(c).strip()]
 
-    # Build options = union(CSV customers, current agent customers)
-    # so defaults are always contained in options
+        # Build options = union(CSV customers, current agent customers)
+        # so defaults are always contained in options
         options_customers = sorted(set(all_customers) | set(current_customers), key=str.lower)
 
         st.markdown("**Customers untuk Agent ini:**")
         edited_customers = st.multiselect(
-        "Ketik Nama Customer",
-        options=options_customers,
-        default=sorted(current_customers, key=str.lower),
-        key="cust_multiselect"
+            "Ketik Nama Customer",
+            options=options_customers,
+            default=sorted(current_customers, key=str.lower),
+            key="cust_multiselect"
         )
 
         typed_new_text = st.text_area(
-        "Customer Lainnya",
-        key="cust_text"
+            "Customer Lainnya",
+            key="cust_text"
         )
         typed_new = _split_names(typed_new_text)
 
         if st.button("💾 Simpan Customer untuk Agent ini"):
             base = set(n.strip() for n in edited_customers)
             base.update(typed_new)
-        # keep any existing customers not present in CSV list (already covered by union, but safe)
+            # keep any existing customers not present in CSV list (already covered by union, but safe)
             base.update([c for c in current_customers if c not in all_customers])
             st.session_state.agents[current_key] = sorted(base, key=str.lower)
             st.success(f"Menyimpan {len(st.session_state.agents[current_key])} customers untuk '{current_key}'.")
 
     month_year = st.text_input("📅 Bulan (YYYY-MM)", value=datetime.now().strftime("%Y-%m"))
     discount = st.slider("💸 Diskon", 0.0, 0.5, 0.20, 0.05)
+
+    # NEW: pilih / tampilkan tanggal invoice
+    invoice_date = st.date_input(   # NEW
+        "🗓️ Tanggal Invoice",       # NEW
+        value=datetime.now().date() # NEW
+    )                               # NEW
+    invoice_date_str = invoice_date.strftime("%d/%m/%Y")  # NEW
 
     if st.button("Buat Invoice"):
         if not agent_name:
@@ -310,16 +315,25 @@ if uploaded_file:
                 }
                 inv_df = pd.concat([inv_df, pd.DataFrame([total_row])], ignore_index=True)
 
-                st.subheader(f"📊 Invoice for {normalize_key_lookup(st.session_state.agents, agent_name)} — {month_year}")
+                # Normalized agent name for display
+                agent_key_display = normalize_key_lookup(st.session_state.agents, agent_name)  # NEW
+
+                st.subheader(f"📊 Invoice for {agent_key_display} — {month_year}")
+                st.markdown(f"**Tanggal Invoice:** {invoice_date_str}")  # NEW
+
                 st.dataframe(inv_df, use_container_width=True)
 
                 # -------- PNG download (with bold TOTAL row) --------
-                img_buf = df_to_image(inv_df, title=f"Invoice - {normalize_key_lookup(st.session_state.agents, agent_name)}")
+                img_title = (  # NEW
+                    f"Invoice - {agent_key_display} ({month_year})\n"  # NEW
+                    f"Tanggal Invoice: {invoice_date_str}"             # NEW
+                )                                                     # NEW
+                img_buf = df_to_image(inv_df, title=img_title)        # CHANGED
                 st.image(img_buf, caption="Invoice Preview", use_container_width=True)
                 st.download_button(
                     label="⬇️ Download Invoice Image (PNG)",
                     data=img_buf,
-                    file_name=f"Invoice_{normalize_key_lookup(st.session_state.agents, agent_name)}_{month_year}.png",
+                    file_name=f"Invoice_{agent_key_display}_{month_year}.png",  # CHANGED
                     mime="image/png"
                 )
 
@@ -327,10 +341,17 @@ if uploaded_file:
                 # Requires: pip install xlsxwriter
                 excel_buf = io.BytesIO()
                 with pd.ExcelWriter(excel_buf, engine="xlsxwriter") as writer:
-                    inv_df.to_excel(writer, index=False, sheet_name="Invoice")
+                    # startrow=3 so we can write header info above the table  # NEW
+                    inv_df.to_excel(writer, index=False, sheet_name="Invoice", startrow=3)  # CHANGED
                     wb  = writer.book
                     ws  = writer.sheets["Invoice"]
-                    # Optional column widths
+
+                    # NEW: header info in Excel
+                    ws.write(0, 0, f"Invoice - {agent_key_display}")             # NEW
+                    ws.write(1, 0, f"Bulan: {month_year}")                       # NEW
+                    ws.write(2, 0, f"Tanggal Invoice: {invoice_date_str}")       # NEW
+
+                    # Optional column widths (same as before)
                     ws.set_column("A:A", 12)
                     ws.set_column("B:B", 18)
                     ws.set_column("C:C", 22)
@@ -341,6 +362,6 @@ if uploaded_file:
                 st.download_button(
                     label="⬇️ Download Invoice (Excel)",
                     data=excel_buf,
-                    file_name=f"Invoice_{normalize_key_lookup(st.session_state.agents, agent_name)}_{month_year}.xlsx",
+                    file_name=f"Invoice_{agent_key_display}_{month_year}.xlsx",  # CHANGED
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
