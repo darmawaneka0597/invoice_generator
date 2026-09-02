@@ -30,6 +30,30 @@ def _clean_order_no(value: str) -> str:
     """Strip Excel formula wrappers: =\"20250930-12302\" -> 20250930-12302."""
     s = str(value)
     return s[2:-1] if s.startswith('="') and s.endswith('"') else s
+def _parse_idr(value) -> float:
+    """
+    Parse a Rupiah amount from a ReBill export column (e.g. 'Total').
+
+    ReBill formats these with '.' as a THOUSANDS separator and no decimal
+    part (IDR has no fractional currency) - e.g. the text '223.960' means
+    Rp223.960 (=223960), not the number 223.96. If a column is read with
+    pandas' default numeric type inference, that '.' gets treated as a
+    decimal point instead and every amount is silently divided by ~1000
+    (Rp223.960 -> 223.96). To avoid that, the caller must read this column
+    as raw text (dtype=str) so the original digits survive, and this
+    function does the real parsing: strip '.' thousands separators, then
+    treat a trailing ',' (if ever present) as a decimal separator.
+    """
+    if value is None:
+        return 0.0
+    s = str(value).strip()
+    if not s or s.lower() == "nan":
+        return 0.0
+    s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
 def format_rp(value: float, decimals: int = 0) -> str:
     """Format a number as Indonesian Rupiah: Rp1.234.567"""
     v = 0.0 if (value is None or value != value) else float(value)
@@ -60,7 +84,12 @@ def load_rebill_df(file, skiprows: int = 5) -> pd.DataFrame:
     - Parses date into a unified 'Tanggal_dt' column.
     - Parses Total into a numeric 'Total_num' column.
     """
-    df = pd.read_csv(file, skiprows=skiprows, engine="python")
+    # Read every column as raw text first. Letting pandas auto-detect
+    # numeric columns would parse 'Total' values like '223.960' as the
+    # float 223.96 (treating the Indonesian thousands separator as a
+    # decimal point) before we ever get a chance to interpret it correctly
+    # - see _parse_idr for the full explanation.
+    df = pd.read_csv(file, skiprows=skiprows, engine="python", dtype=str)
     df.columns = [str(c).strip() for c in df.columns]
     # Clean order-number column (handles Excel formula wrappers)
     id_col = next((c for c in df.columns if c.lower() in _ID_COLS), None)
@@ -70,9 +99,9 @@ def load_rebill_df(file, skiprows: int = 5) -> pd.DataFrame:
     date_col = next((c for c in df.columns if c.lower() in _DATE_COLS), None)
     if date_col:
         df["Tanggal_dt"] = df[date_col].map(_parse_date)
-    # Parse total -> numeric
+    # Parse total -> numeric (Indonesian '.' thousands-separator format)
     if "Total" in df.columns:
-        df["Total_num"] = pd.to_numeric(df["Total"], errors="coerce")
+        df["Total_num"] = df["Total"].map(_parse_idr)
     # Drop deleted rows
     if "Status" in df.columns:
         mask_deleted = (
